@@ -1,30 +1,13 @@
-# Java 面试总结
-
-## 大纲
+# Java 基础
 
 
-
-
-
-![img](http://icdn.apigo.cn/gitchat/java-intervier-gitchat-path.png)
-
-
-
-
-
-
-
-## JAVA
-
-### java基础
-
-java注解的实现原理：
+## java注解的实现原理
 
 注解本质是一个继承了Annotation 的特殊接口，其具体实现类是Java 运行时生成的动态代理类。而我们通过反射获取注解时，返回的是Java 运行时生成的动态代理对象$Proxy1。通过代理对象调用自定义注解（接口）的方法，会最终调用AnnotationInvocationHandler 的invoke 方法。该方法会从memberValues 这个Map 中索引出对应的值。而memberValues 的来源是Java 常量池。
 
 
+## equal() 和 hashCode()
 
-**equal() 和hashCode()**：
 
 equal()相等的两个对象他们的hashCode()肯定相等，也就是用equal()对比是绝对可靠的。
 
@@ -84,6 +67,7 @@ Q：为什么要**重写HashCode()**方法？
 2. 避免歧义，出现equal不等，hashcode却相等的情况。
 
 
+## 定义
 
 **HTTP协议**
 
