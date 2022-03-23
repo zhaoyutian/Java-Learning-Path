@@ -34,6 +34,8 @@ kafka等中间件是不主动维护幂等性的，但系统消费了某条信息
 
 
 
+
+
 ### 数据顺序性问题
 
 出现的场景：以Kafka为例，若要同步案件信息，指定案件ID为key，同key放入同一个partition，此时的消息是顺序的，此时消费者单线程消费，就能保证顺序，但如果消费者多线程消费，就无法保证顺序。
@@ -80,4 +82,128 @@ todo
 qb系统用的是Kafka，因为吞吐量比较大，功能简单，就是外网情报向内网的信息传输，并且考虑到之后有可能增加的业务，kafka分布式架构，可拓展性也比较好，主副本也不会丢失数据。加上Kafka本身社区活跃度也很高，也算是大数据方面的行业标准。
 RabbitMQ是elang语言，有学习成本。
 RocketMQ是阿里系出品，跟我们是合作竞争关系
+
+
+### 限流方式
+
+#### 计数器
+
+利用原子类进行计数，确保线程安全，在单位时间内，若访问数小于最大访问量，则请求统一，否则限流。
+
+劣势，若单位时间内的请求分布不均衡，导致很短时间内访问超过阈值，则会导致崩溃。比如设置60秒内的处理阈值为600，系统在58-59秒内收到500+的请求，导致系统处理不过来。
+
+```java
+public class Counter {
+    /**
+     * 最大访问数量
+     */
+    private final int limit = 10;
+    /**
+     * 访问时间差
+     */
+    private final long timeout = 1000;
+    /**
+     * 请求时间
+     */
+    private long time;
+    /**
+     * 当前计数器
+     */
+    private AtomicInteger reqCount = new AtomicInteger(0);
+
+    public boolean limit() {
+        long now = System.currentTimeMillis();
+        if (now < time + timeout) {
+            // 单位时间内
+            reqCount.addAndGet(1);
+            return reqCount.get() <= limit;
+        } else {
+            // 超出单位时间
+            time = now;
+            reqCount = new AtomicInteger(0);
+            return true;
+        }
+    }
+}
+
+```
+
+#### 滑动窗口
+
+增加时间粒度，每个粒度独立计数。核心是维护线程安全的队列，每次尝试获取都要判断队列长度，满足则增加到队列中，否则限流，同时创建永续线程定时清理过期队列。
+
+```java
+package com.example.demo1.service;
+
+import java.util.Iterator;
+import java.util.Random;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.stream.IntStream;
+
+public class TimeWindow {
+    private ConcurrentLinkedQueue<Long> queue = new ConcurrentLinkedQueue<Long>();
+
+    /**
+     * 间隔秒数
+     */
+    private int seconds;
+
+    /**
+     * 最大限流
+     */
+    private int max;
+
+    public static void main(String[] args) throws Exception {
+    /**
+     * 获取令牌，并且添加时间
+     */
+    public void take() {
+
+        long start = System.currentTimeMillis();
+        try {
+
+            int size = sizeOfValid();
+            if (size > max) {
+                System.err.println("超限");
+
+            }
+            synchronized (queue) {
+                if (sizeOfValid() > max) {
+                    System.err.println("超限");
+                    System.err.println("queue中有 " + queue.size() + " 最大数量 " + max);
+                }
+                this.queue.offer(System.currentTimeMillis());
+            }
+            System.out.println("queue中有 " + queue.size() + " 最大数量 " + max);
+        }
+    }
+
+    public int sizeOfValid() {
+        Iterator<Long> it = queue.iterator();
+        Long ms = System.currentTimeMillis() - seconds * 1000;
+        int count = 0;
+        while (it.hasNext()) {
+            long t = it.next();
+            if (t > ms) {
+                // 在当前的统计时间范围内
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * 清理过期的时间
+     */
+    public void clean() {
+        Long c = System.currentTimeMillis() - seconds * 1000;
+
+        Long tl = null;
+        while ((tl = queue.peek()) != null && tl < c) {
+            System.out.println("清理数据");
+            queue.poll();
+        }
+    }
+}
+```
 
